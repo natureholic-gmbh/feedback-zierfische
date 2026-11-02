@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Danke für deine Bewertung</title>
+<style>
+  :root { --akzent: #111111; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f5f5f5; color: #111; font-family: Arial, Helvetica, sans-serif; }
+  .karte { max-width: 520px; margin: 48px auto; background: #fff; border-radius: 14px; text-align: center; overflow: hidden; border-top: 5px solid var(--akzent); }
+  .kopf { padding: 20px; }
+  .kopf img { display: block; max-width: 220px; max-height: 60px; margin: 0 auto; }
+  .inhalt { padding: 28px 24px 32px; }
+  .note { display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 12px; background: var(--akzent); color: #fff; font-size: 26px; font-weight: bold; }
+  h1 { font-size: 21px; margin: 18px 0 6px; }
+  p { color: #666; margin: 0 0 18px; line-height: 1.45; }
+  textarea { width: 100%; min-height: 110px; padding: 12px; border: 1px solid #d0d0d0; border-radius: 8px; font: inherit; resize: vertical; }
+  button, .tp { display: block; width: 100%; margin-top: 12px; padding: 14px; border: 0; border-radius: 8px; background: var(--akzent); color: #fff; font: inherit; font-weight: bold; cursor: pointer; text-decoration: none; }
+  .tp { background: #00b67a; }
+  .tp.google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
+  .klein { font-size: 13px; color: #888; margin-top: 18px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="karte">
+  <a class="kopf" id="kopf" hidden><img id="logo" alt=""></a>
+  <div class="inhalt">
+  <div class="note" id="note">–</div>
+  <h1 id="titel">Danke für deine Bewertung!</h1>
+  <p id="frage">Möchtest du uns noch mehr erzählen? (optional)</p>
+
+  <form id="formular">
+    <textarea id="kommentar" maxlength="2000" placeholder="Dein Feedback …"></textarea>
+    <button type="submit" id="senden">Feedback absenden</button>
+  </form>
+  <p id="gesendet" hidden>Vielen Dank, dein Feedback ist angekommen.</p>
+
+  <div id="bewerten" hidden>
+    <p class="klein">Du bist zufrieden? Dann freuen wir uns riesig über eine öffentliche Bewertung.</p>
+    <a class="tp" id="tp-link" href="#" hidden>Auf Trustpilot bewerten</a>
+    <a class="tp google" id="google-link" href="#" hidden>Auf Google bewerten</a>
+  </div>
+  <p id="fehler" class="klein" hidden>Der Link ist leider ungültig.</p>
+  </div>
+</main>
+<script>
+  const API = "https://uoosnwuijixytqvlrrfc.supabase.co/functions/v1/nps";
+  const q = new URLSearchParams(location.search);
+  const s = q.get("s"), o = q.get("o");
+  const $ = (id) => document.getElementById(id);
+
+  const FRAGEN = {
+    promoter: "Was hat dir besonders gefallen?",
+    passiv: "Was fehlt dir zur 10?",
+    detraktor: "Was ist schiefgelaufen? Wir melden uns bei dir.",
+  };
+  const kategorie = (n) => (n >= 9 ? "promoter" : n >= 7 ? "passiv" : "detraktor");
+
+  async function laden() {
+    const r = await fetch(`${API}?s=${encodeURIComponent(s)}&o=${encodeURIComponent(o)}`);
+    const d = await r.json();
+    if (!r.ok || d.note === null) { ungueltig(); return; }
+    document.documentElement.style.setProperty("--akzent", d.farbe);
+    document.title = `Danke – ${d.name}`;
+    if (d.logo_url) {
+      $("logo").src = d.logo_url;
+      $("logo").alt = d.name;
+      $("kopf").href = `https://${d.domain}`;
+      $("kopf").style.background = d.logo_hintergrund;
+      $("kopf").style.display = "block";
+      $("kopf").hidden = false;
+    }
+    $("note").textContent = d.note;
+    $("kommentar").placeholder = FRAGEN[kategorie(d.note)];
+    if (d.kommentar_vorhanden) { $("formular").hidden = true; $("frage").hidden = true; $("gesendet").hidden = false; }
+    const weiter = (ziel) => `${API}?s=${encodeURIComponent(s)}&o=${encodeURIComponent(o)}&ziel=${ziel}`;
+    if (d.trustpilot) { $("tp-link").href = weiter("trustpilot"); $("tp-link").hidden = false; }
+    if (d.google) { $("google-link").href = weiter("google"); $("google-link").hidden = false; }
+    if (d.trustpilot || d.google) $("bewerten").hidden = false;
+  }
+
+  $("formular").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const kommentar = $("kommentar").value.trim();
+    if (!kommentar) return;
+    $("senden").disabled = true;
+    const r = await fetch(API, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ s, o, kommentar }),
+    });
+    if (r.ok) { $("formular").hidden = true; $("frage").hidden = true; $("gesendet").hidden = false; }
+    else { $("senden").disabled = false; }
+  });
+
+  // Ohne gueltige Antwort (z. B. Seite direkt aufgerufen) nur einen Hinweis zeigen
+  function ungueltig() {
+    for (const id of ["note", "frage", "formular"]) $(id).hidden = true;
+    $("titel").textContent = "Danke für deinen Besuch!";
+    $("fehler").hidden = false;
+  }
+
+  if (!s || !o) ungueltig();
+  else laden().catch(ungueltig);
+</script>
+</body>
+</html>
